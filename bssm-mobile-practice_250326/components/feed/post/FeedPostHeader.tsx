@@ -7,7 +7,7 @@ import { Link } from 'expo-router';
 
 function FeedPostHeader({ user }: { user: User }) {
     return (
-        <Link href={`/profile`}>
+        <Link href={`/profile?userId=${user.id}`}>
             <ContentContainer style={styles.container}>
                 <Image
                     source={{ uri: user.avatarUrl }}

@@ -455,4 +455,20 @@ const MOCK_POSTS: Post[] = [
     },
 ];
 
+// 데이터 복제해서 자동 추가 (id 8-14)
+const additionalPosts = MOCK_POSTS.slice(0, 7).map((p, i) => ({
+    ...p,
+    id: String(8 + i),
+    comments: p.comments.map(c => ({
+        ...c,
+        id: 'c' + (8 + i) + '-' + c.id.slice(3),
+        replies: c.replies.map(r => ({
+            ...r,
+            id: 'r' + (8 + i) + '-' + r.id.slice(3),
+        })),
+    })),
+}));
+
+MOCK_POSTS.push(...additionalPosts);
+
 export default MOCK_POSTS;

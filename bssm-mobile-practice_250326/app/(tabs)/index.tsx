@@ -1,10 +1,10 @@
-import { View } from 'react-native';
-import NavigationTop from '@components/navigation/NavigationTop';
+import MOCK_POSTS from '@/mock/posts';
 import ContentContainer from '@components/container';
 import { FeedList } from '@components/feed/FeedList';
-import MOCK_POSTS from '@/mock/posts';
-import { Ionicons } from '@expo/vector-icons';
+import NavigationTop from '@components/navigation/NavigationTop';
 import { ThemedView } from '@components/themed-view';
+import { Ionicons } from '@expo/vector-icons';
+import { FlatList, View } from 'react-native';
 
 export default function HomeScreen() {
     return (
@@ -33,7 +33,11 @@ export default function HomeScreen() {
             </ContentContainer>
 
             {/* 피드 정보 렌더링 */}
-            <FeedList posts={MOCK_POSTS} />
+            <FlatList
+                data={MOCK_POSTS}
+                keyExtractor={item => item.id}
+                renderItem={({ item }) => <FeedList posts={[item]} />}
+            />
         </ThemedView>
     );
 }
