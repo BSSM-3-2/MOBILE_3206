@@ -5,11 +5,15 @@ import { FeedList } from '@components/feed/FeedList';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedView } from '@components/themed-view';
 import { useFeedStore } from '@/store/feed-store';
+import { useEffect } from 'react';
 
 export default function HomeScreen() {
     const { posts, loading, fetchFeed: _fetchFeed, loadMore } = useFeedStore();
 
     // TODO: (4.5차) 화면이 처음 마운트될 때 fetchFeed()를 호출한다
+    useEffect(() => {
+        _fetchFeed();
+    }, []);
 
     return (
         <ThemedView style={{ flex: 1 }}>

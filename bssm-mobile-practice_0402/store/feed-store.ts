@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { Post } from '@type/Post';
 import { getFeed } from '@/api/content';
 // TODO: (5차) toggleLike 구현 시 필요한 함수를 import에 추가한다
-// import { likePost, unlikePost } from '@/api/content';
+import { likePost, unlikePost } from '@/api/content';
 
 interface FeedState {
     posts: Post[];
@@ -26,6 +26,18 @@ export const useFeedStore = create<FeedState>((set, get) => ({
     fetchFeed: async () => {
         // TODO: (4차) set()으로 loading을 켜고, getFeed(1)를 호출해 posts/pagination을 저장한다
         // 힌트: try/catch로 감싸고 실패 시 error 메시지도 저장한다
+        set({ loading: true, error: null });
+        try {
+            const { data, pagination } = await getFeed(1);
+            set({
+                posts: data,
+                page: 1,
+                hasNext: pagination.hasNext,
+                loading: false,
+            });
+        } catch (e) {
+            set({ error: 'Failed to fetch feed', loading: false });
+        }
     },
 
     loadMore: async () => {
@@ -42,7 +54,7 @@ export const useFeedStore = create<FeedState>((set, get) => ({
                 hasNext: pagination.hasNext,
                 loading: false,
             });
-        } catch {
+        } catch (e) {
             set({ loading: false });
         }
     },
@@ -53,8 +65,39 @@ export const useFeedStore = create<FeedState>((set, get) => ({
         const target = posts.find(p => p.id === postId);
         if (!target) return;
 
-        // TODO: (5차) 낙관적 업데이트를 구현한다
-        // 순서: ① UI 즉시 반영 → ② API 호출 → ③ 서버 응답으로 동기화 → ④ 실패 시 롤백
-        // 힌트: 롤백할 때 posts 대신 get().posts를 써야 하는 이유를 생각해보자
+        // ① UI 즉시 반영 (낙관적 업데이트)
+        const updatedPosts = posts.map(post =>
+            post.id === postId
+                ? {
+                      ...post,
+                      liked: !post.liked,
+                      likesCount: post.liked ? post.likes - 1 : post.likes + 1,
+                  }
+                : post,
+        );
+        set({ posts: updatedPosts });
+
+        try {
+            // ② API 호출
+            if (target.liked) {
+                await unlikePost(postId);
+            } else {
+                await likePost(postId);
+            }
+            // ③ 성공 시 서버 응답으로 동기화 (이미 UI는 반영됨)
+        } catch (error) {
+            // ④ 실패 시 롤백 - get().posts 사용 (최신 상태)
+            const currentPosts = get().posts;
+            const rollbackPosts = currentPosts.map(post =>
+                post.id === postId
+                    ? {
+                          ...post,
+                          liked: target.liked,
+                          likesCount: target.likes,
+                      }
+                    : post,
+            );
+            set({ posts: rollbackPosts });
+        }
     },
 }));
