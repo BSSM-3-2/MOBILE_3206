@@ -17,6 +17,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createPost } from '@/api/content';
 import { useFeedStore } from '@/store/feed-store';
 import { Pretendard, FontSizes, Spacing, FeedColors } from '@/constants/theme';
+import * as ImagePicker from 'expo-image-picker';
+import * as Linking from 'expo-linking';
+import * as Notifications from 'expo-notifications';
 
 interface SelectedImage {
     uri: string;
@@ -30,8 +33,21 @@ async function scheduleUploadNotification(caption: string) {
     // getPermissionsAsync로 알림 권한을 확인하고 미허용이면 return 하세요
     // scheduleNotificationAsync로 로컬 알림을 발송하세요
     // content에 title, body를 구성하고
-    // TODO 실습 6-2
-    // trigger: { seconds: N }으로 N초 딜레이 발송을 테스트해보세요
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+        return;
+    }
+
+    await Notifications.scheduleNotificationAsync({
+        content: {
+            title: '✅ 게시물 업로드 완료',
+            body: caption ? `"${caption.slice(0, 30)}${caption.length > 30 ? '...' : ''}"` : '새로운 게시물이 업로드되었습니다!',
+            data: { screen: 'feed', postType: 'new' },
+        },
+        // TODO 실습 6-2
+        // trigger: { seconds: N }으로 N초 딜레이 발송을 테스트해보세요
+        trigger: { seconds: 3 }, // 3초 딜레이 발송
+    });
 }
 
 export default function CreateScreen() {
@@ -50,17 +66,88 @@ export default function CreateScreen() {
     const handlePickImage = async () => {
         // TODO 실습 1-1
         // getMediaLibraryPermissionsAsync로 현재 권한 상태(status, canAskAgain)를 확인하세요
+        const { status, canAskAgain } =
+            await ImagePicker.getMediaLibraryPermissionsAsync();
         // TODO 실습 2-1
         // canAskAgain이 false면 Linking.openSettings()로 설정 앱을 유도하고 return 하세요
+        if (status !== 'granted' && !canAskAgain) {
+            Alert.alert(
+                '권한 필요',
+                '갤러리 접근 권한이 필요합니다. 설정에서 권한을 허용해 주세요.',
+                [
+                    { text: '취소', style: 'cancel' },
+                    {
+                        text: '설정으로 이동',
+                        onPress: () => {
+                            Linking.openSettings();
+                        },
+                    },
+                ],
+            );
+            return;
+        }
         // TODO 실습 3-1 (iOS)
         // Platform.OS === 'ios'이고 아직 미결정 상태라면
         // 커스텀 Alert로 사용 목적을 먼저 안내한 뒤 시스템 팝업을 띄우세요
+        if (Platform.OS === 'ios' && status === 'undetermined') {
+            Alert.alert(
+                '갤러리 접근 권한',
+                '사진을 업로드하려면 갤러리 접근이 필요합니다.',
+                [
+                    { text: '괜찮아요', style: 'cancel' },
+                    {
+                        text: '허용',
+                        onPress: async () => {
+                            const { status: newStatus } =
+                                await ImagePicker.requestMediaLibraryPermissionsAsync();
+                            if (newStatus === 'granted') {
+                                const result = await ImagePicker.launchImageLibraryAsync({
+                                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                    quality: 0.8,
+                                });
+                                if (!result.canceled) {
+                                    const newImage: SelectedImage = {
+                                        uri: result.assets[0].uri,
+                                        name: result.assets[0].fileName || 'image.jpg',
+                                        type: result.assets[0].mimeType || 'image/jpeg',
+                                    };
+                                    setImages(prev => [...prev, newImage]);
+                                }
+                            }
+                        }
+                    },
+                ],
+            );
+            return;
+        }
         // TODO 실습 1-2
         // 미허용 상태라면 requestMediaLibraryPermissionsAsync로 권한을 요청하세요
         // 거부 시 Alert 안내 후 return 하세요
+        if (status !== 'granted') {
+            const { status: newStatus } =
+                await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+            if (newStatus !== 'granted') {
+                Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+                return;
+            }
+        }
         // TODO 실습 1-3
         // launchImageLibraryAsync로 이미지 피커를 실행하고
         // 선택된 asset에서 uri, fileName, mimeType을 추출해 setImages에 저장하세요
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            const newImage: SelectedImage = {
+                uri: result.assets[0].uri,
+                name: result.assets[0].fileName || 'image.jpg',
+                type: result.assets[0].mimeType || 'image/jpeg',
+            };
+            setImages(prev => [...prev, newImage]);
+        }
     };
 
     const handleRemoveImage = (index: number) => {

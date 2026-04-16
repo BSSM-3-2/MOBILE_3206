@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 
 const BASE_URL = Platform.select({
-    default: 'http://localhost:3000',
+    default: 'https://bssm-api.zer0base.me/',
 });
 
 const apiClient = axios.create({

@@ -23,8 +23,8 @@ import * as Notifications from 'expo-notifications';
 // shouldShowAlert, shouldPlaySound 옵션 값을 채워보세요
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
-        shouldShowAlert: false, // TODO: 배너 표시 여부
-        shouldPlaySound: false, // TODO: 소리 재생 여부
+        shouldShowAlert: true, // Foreground에서 배너 표시
+        shouldPlaySound: true, // Foreground 수신 시 소리 알림
         shouldSetBadge: false,
         shouldShowBanner: false,
         shouldShowList: false,
@@ -49,24 +49,53 @@ function AuthGuard() {
     useEffect(() => {
         // TODO 실습 7-1
         // addNotificationReceivedListener로 Foreground 수신 이벤트 구독
+        const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
+            // Foreground 알림 수신 처리
+        });
+
         // TODO 실습 7-2
         // addNotificationResponseReceivedListener로 알림 탭 이벤트 구독
+        const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+            const data = response.notification.request.content.data;
+            if (data.screen) {
+                // 필요시 router를 사용해 해당 화면으로 이동
+            }
+        });
+
         // TODO 실습 7-3
         // getLastNotificationResponseAsync로 Killed 상태 진입 데이터 확인
+        Notifications.getLastNotificationResponseAsync().then(response => {
+            if (response) {
+                const data = response.notification.request.content.data;
+                if (data.screen) {
+                    // 필요시 router를 사용해 해당 화면으로 이동
+                }
+            }
+        });
+
         // TODO 실습 7-4 (return)
         // 리스너 클린업 — sub.remove() 호출
+        return () => {
+            foregroundSubscription.remove();
+            responseSubscription.remove();
+        };
     }, []);
 
     useEffect(() => {
         const currentRoute = segments[0] as string | undefined;
         const inAuthRoute = AUTH_ROUTES.has(currentRoute ?? '');
 
-        if (!accessToken && !inAuthRoute) {
-            router.replace('/login' as never);
-        } else if (accessToken && inAuthRoute) {
-            router.replace('/(tabs)');
-        }
-    }, [accessToken, segments]);
+        // setTimeout으로 다음 tick에서 실행
+        const timeoutId = setTimeout(() => {
+            if (!accessToken && !inAuthRoute) {
+                router.replace('/login' as never);
+            } else if (accessToken && inAuthRoute) {
+                router.replace('/(tabs)');
+            }
+        }, 0);
+
+        return () => clearTimeout(timeoutId);
+    }, [accessToken, segments, router]);
 
     return null;
 }
