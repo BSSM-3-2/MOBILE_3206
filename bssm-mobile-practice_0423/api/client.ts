@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 
 const BASE_URL: string =
@@ -11,6 +11,29 @@ const apiClient = axios.create({
         'Content-Type': 'application/json',
     },
 });
+
+type RetryableRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean };
+
+let isRefreshing = false;
+let pendingQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (error: unknown) => void;
+}> = [];
+
+const flushPendingQueue = (error: unknown | null, token?: string) => {
+    pendingQueue.forEach(({ resolve, reject }) => {
+        if (error) {
+            reject(error);
+            return;
+        }
+
+        if (token) {
+            resolve(token);
+        }
+    });
+
+    pendingQueue = [];
+};
 
 // Request Interceptor
 // 모든 요청 전에 실행 — 토큰 주입
@@ -31,6 +54,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     response => response,
     async error => {
+        const axiosError = error as AxiosError;
         const status = error.response?.status;
 
         if (status === 404) {
@@ -42,13 +66,44 @@ apiClient.interceptors.response.use(
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { useAuthStore } = require('@/store/auth-store');
             const store = useAuthStore.getState();
+            const originalRequest = axiosError.config as RetryableRequestConfig;
 
-            // TODO 실습 4-3: store.logOut()을 호출하세요
+            if (
+                !originalRequest ||
+                originalRequest._retry ||
+                originalRequest.url?.includes('/auth/refresh')
+            ) {
+                await store.logOut();
+                return Promise.reject(error);
+            }
 
-            // TODO 실습 5-2: logOut 대신 토큰 갱신을 시도하고 원본 요청을 재시도하세요
-            //   - isRefreshing 플래그로 중복 갱신 방지
-            //   - 갱신 중 들어온 요청은 pendingQueue에 쌓아두었다가 완료 후 일괄 처리
-            //   - 갱신 실패 시 store.logOut() 호출
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    pendingQueue.push({
+                        resolve: token => {
+                            originalRequest.headers.Authorization = `Bearer ${token}`;
+                            resolve(apiClient(originalRequest));
+                        },
+                        reject,
+                    });
+                });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                const newAccessToken = await store.refreshAccessToken();
+                originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                flushPendingQueue(null, newAccessToken);
+                return apiClient(originalRequest);
+            } catch (refreshError) {
+                flushPendingQueue(refreshError);
+                await store.logOut();
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
 
             return Promise.reject(error);
         }
